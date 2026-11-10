@@ -45,6 +45,28 @@ test("kick rejects with UserFacingError", async () => {
   await expect(p).rejects.toBeInstanceOf(UserFacingError);
 });
 
+test("name_taken kick names the signed-in profile and explains the username/cache-key mismatch", async () => {
+  const m = new BotManager(loadConfig({}));
+  const p = m.connect({ username: "urzk_", auth: "microsoft" });
+  const { bot } = created[0];
+  Object.assign(bot, { _client: { username: "urzk" } });
+  bot.emit("kicked", JSON.stringify({ translate: "multiplayer.disconnect.name_taken" }));
+  const err = await p.catch((e: unknown) => e);
+  expect(err).toBeInstanceOf(UserFacingError);
+  const msg = (err as Error).message;
+  expect(msg).toContain("name_taken");
+  expect(msg).toContain('"urzk"');
+  expect(msg).toContain('"urzk_"');
+  expect(m.status().lastDisconnectReason).toContain('"urzk"');
+});
+
+test("other kicks are reported unchanged", async () => {
+  const m = new BotManager(loadConfig({}));
+  const p = m.connect({});
+  created[0].bot.emit("kicked", "bye");
+  await expect(p).rejects.toThrow("Connection failed: kicked: bye");
+});
+
 test("spawn timeout rejects with UserFacingError", async () => {
   vi.useFakeTimers();
   try {

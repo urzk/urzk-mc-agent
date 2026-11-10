@@ -111,7 +111,10 @@ export class BotManager {
         if (this.current === bot) this.spawned = true;
         settle(() => resolve({ state: "connected", status: this.status() }));
       });
-      bot.on("kicked", (reason) => drop(`kicked: ${typeof reason === "string" ? reason : JSON.stringify(reason)}`));
+      bot.on("kicked", (reason) => {
+        const text = typeof reason === "string" ? reason : JSON.stringify(reason);
+        drop(describeKick(text, cfg.username, profileName(bot)));
+      });
       bot.on("error", (err) => {
         console.error("bot error:", err);
         drop(`error: ${err.message}`, true);
@@ -161,6 +164,27 @@ export class BotManager {
       nearbyPlayers: Object.keys(bot.players).filter((n) => n !== bot.username),
     };
   }
+}
+
+/** The name the server sees: with Microsoft auth it comes from the signed-in account, not from `username`. */
+function profileName(bot: Bot): string | undefined {
+  return (bot as unknown as { _client?: { username?: string } })._client?.username;
+}
+
+function describeKick(reason: string, requested: string, profile: string | undefined): string {
+  const base = `kicked: ${reason}`;
+  if (!reason.includes("name_taken")) return base;
+  const who = profile ?? requested;
+  let msg = `${base} — プロフィール名 "${who}" のプレイヤーが既にサーバーにいます。`;
+  if (profile && profile !== requested) {
+    msg +=
+      ` Microsoft 認証では username ("${requested}") はトークンキャッシュのキーにすぎず、` +
+      `実際の名前はそのキーでサインイン済みのアカウント ("${profile}") になります。` +
+      `別のアカウントで入るには、別の username を指定してサインインし直してください。`;
+  } else {
+    msg += " 同名のプレイヤーをログアウトさせるか、別のアカウントで接続してください。";
+  }
+  return msg;
 }
 
 function stripUndefined<T extends object>(o: T): Partial<T> {

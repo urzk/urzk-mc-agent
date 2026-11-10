@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { applyBlueprint, blueprintCenter } from "../../blueprint/apply.js";
+import { applyBlueprint, blueprintCenter, summarizeApplyResult } from "../../blueprint/apply.js";
 import { BlueprintSchema } from "../../blueprint/schema.js";
 import { verifyBlueprint } from "../../blueprint/verify.js";
 import { teleportBot } from "../../bot/teleport.js";
@@ -19,7 +19,8 @@ export function registerBlueprintTools(server: McpServer, ctx: ToolContext): voi
     {
       description:
         "Compile a blueprint into /fill, /setblock (and WorldEdit) commands and run them. The bot first teleports " +
-        "to the centre of the build area (needs op) so the chunks are loaded. Use dryRun=true to only see the commands.",
+        "to the centre of the build area (needs op) so the chunks are loaded. Use dryRun=true to only see the commands. " +
+        "A real run returns counts plus only the non-routine server messages (errors etc), not every command.",
       inputSchema: { blueprint: BlueprintSchema, origin: Origin, dryRun: z.boolean().optional() },
     },
     safe(async ({ blueprint, origin, dryRun }) => {
@@ -30,7 +31,7 @@ export function registerBlueprintTools(server: McpServer, ctx: ToolContext): voi
         origin,
         { dryRun, selfName: ctx.bots.status().username },
       );
-      return jsonResult(result);
+      return jsonResult(summarizeApplyResult(result, dryRun ?? false));
     }),
   );
 
