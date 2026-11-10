@@ -19,11 +19,41 @@ export async function applyBlueprint(
   bp: Blueprint,
   origin: Vec3Tuple,
   opts: { dryRun?: boolean; maxCommands?: number; selfName?: string } = {},
-): Promise<{ commands: string[]; sent: number; messages: string[] }> {
+): Promise<ApplyResult> {
   const commands = compileBlueprint(bp, origin, { maxCommands: opts.maxCommands, selfName: opts.selfName });
   const center = blueprintCenter(bp, origin);
   if (opts.dryRun || commands.length === 0 || !center) return { commands, sent: 0, messages: [] };
   await deps.teleport(center);
   const { sent, messages } = await deps.run(commands);
   return { commands, sent, messages };
+}
+
+export type ApplyResult = { commands: string[]; sent: number; messages: string[] };
+
+export type ApplySummary = {
+  commandCount: number;
+  sent: number;
+  successMessages: number;
+  otherMessages: string[];
+  otherMessagesTruncated: number;
+};
+
+/** Routine per-command feedback (English: mineflayer renders translations with en_US). */
+const SUCCESS_PATTERNS = [/^Changed the block at /, /^Successfully filled \d+ block/, /^Teleported /];
+const MAX_OTHER_MESSAGES = 50;
+
+/**
+ * A real run echoes one feedback line per command, which can be tens of KB; keep only counts and the
+ * messages that are not routine success lines (errors etc). A dry run keeps the full command list.
+ */
+export function summarizeApplyResult(r: ApplyResult, dryRun: boolean): ApplyResult | ApplySummary {
+  if (dryRun) return r;
+  const other = r.messages.filter((m) => !SUCCESS_PATTERNS.some((p) => p.test(m)));
+  return {
+    commandCount: r.commands.length,
+    sent: r.sent,
+    successMessages: r.messages.length - other.length,
+    otherMessages: other.slice(0, MAX_OTHER_MESSAGES),
+    otherMessagesTruncated: Math.max(0, other.length - MAX_OTHER_MESSAGES),
+  };
 }

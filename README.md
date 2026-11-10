@@ -55,6 +55,8 @@ claude mcp add minecraft -- node /abs/path/to/urzk-mc-agent/dist/index.js
 2. `get_status` を繰り返し呼び、`connected: true` になるのを待つ
 3. トークンは パッケージ直下の `.cache/msa`にキャッシュされ、次回以降はコード入力が不要
 
+Microsoft 認証では `MC_USERNAME`（`connect` の `username`）は**トークンキャッシュのキー**で、ゲーム内の名前はそのキーでサインインしたアカウントのものになります。`name_taken` で弾かれた場合、エラーに実際のプロフィール名が出るので、自分のプレイ中アカウントと同じなら別の `username` を指定して Bot 用アカウントでサインインし直してください。
+
 ## ツール一覧
 
 | 分類 | ツール | 概要 |
