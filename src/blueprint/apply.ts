@@ -34,25 +34,50 @@ export type ApplySummary = {
   commandCount: number;
   sent: number;
   successMessages: number;
+  /** Commands that changed nothing because the blocks were already as requested. */
+  unchangedMessages: number;
   otherMessages: string[];
   otherMessagesTruncated: number;
 };
 
+export type DryRunSummary = {
+  commandCount: number;
+  commands: string[];
+  commandsTruncated: number;
+};
+
 /** Routine per-command feedback (English: mineflayer renders translations with en_US). */
 const SUCCESS_PATTERNS = [/^Changed the block at /, /^Successfully filled \d+ block/, /^Teleported /];
+/** Feedback for commands that hit blocks already in the requested state: harmless, but not a success line. */
+const UNCHANGED_PATTERNS = [/^Could not set the block$/, /^No blocks were filled$/];
 const MAX_OTHER_MESSAGES = 50;
+export const MAX_DRY_RUN_COMMANDS = 50;
 
 /**
  * A real run echoes one feedback line per command, which can be tens of KB; keep only counts and the
- * messages that are not routine success lines (errors etc). A dry run keeps the full command list.
+ * messages that are not routine (errors etc). A dry run keeps only the first commands for the same reason.
  */
-export function summarizeApplyResult(r: ApplyResult, dryRun: boolean): ApplyResult | ApplySummary {
-  if (dryRun) return r;
-  const other = r.messages.filter((m) => !SUCCESS_PATTERNS.some((p) => p.test(m)));
+export function summarizeApplyResult(r: ApplyResult, dryRun: boolean): DryRunSummary | ApplySummary {
+  if (dryRun) {
+    return {
+      commandCount: r.commands.length,
+      commands: r.commands.slice(0, MAX_DRY_RUN_COMMANDS),
+      commandsTruncated: Math.max(0, r.commands.length - MAX_DRY_RUN_COMMANDS),
+    };
+  }
+  let success = 0;
+  let unchanged = 0;
+  const other: string[] = [];
+  for (const m of r.messages) {
+    if (SUCCESS_PATTERNS.some((p) => p.test(m))) success++;
+    else if (UNCHANGED_PATTERNS.some((p) => p.test(m))) unchanged++;
+    else other.push(m);
+  }
   return {
     commandCount: r.commands.length,
     sent: r.sent,
-    successMessages: r.messages.length - other.length,
+    successMessages: success,
+    unchangedMessages: unchanged,
     otherMessages: other.slice(0, MAX_OTHER_MESSAGES),
     otherMessagesTruncated: Math.max(0, other.length - MAX_OTHER_MESSAGES),
   };

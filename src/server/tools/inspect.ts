@@ -6,7 +6,7 @@ import { listBlocks, renderLayers } from "../../inspect/layers.js";
 import { makeBlockReader } from "../../inspect/blockReader.js";
 import { formatBlockSpec } from "../../blueprint/blockSpec.js";
 import type { ToolContext } from "../createServer.js";
-import { closeScreenshot, takeScreenshot } from "../../inspect/screenshot.js";
+import { closeScreenshot, DEFAULT_VIEW_DISTANCE, MAX_VIEW_DISTANCE, takeScreenshot } from "../../inspect/screenshot.js";
 import { jsonResult, safe } from "../result.js";
 
 const Coord = z.tuple([z.number().int(), z.number().int(), z.number().int()]);
@@ -60,16 +60,19 @@ export function registerInspectTools(server: McpServer, ctx: ToolContext): void 
     {
       description:
         "Take a first-person screenshot (PNG) from `position` looking at `lookAt`. Teleports the bot there (needs op). " +
-        "Waits a few seconds for chunk rendering; the first call also starts a headless browser. Default size 1024x576.",
+        "Waits a few seconds for chunk rendering; the first call also starts a headless browser. Default size 1024x576. " +
+        `Only chunks within viewDistance (default ${DEFAULT_VIEW_DISTANCE}, about ${(DEFAULT_VIEW_DISTANCE - 1) * 16} blocks) of the camera are drawn; ` +
+        "raise it for large builds (slower; it stays set for later calls, and chunks the bot has not loaded are never drawn).",
       inputSchema: {
         position: Coord,
         lookAt: Coord,
         width: z.number().int().min(64).max(2048).optional(),
         height: z.number().int().min(64).max(2048).optional(),
+        viewDistance: z.number().int().min(1).max(MAX_VIEW_DISTANCE).optional(),
       },
     },
-    safe(async ({ position, lookAt, width, height }) => {
-      const png = await takeScreenshot(ctx.bots.bot, { position, lookAt, width, height });
+    safe(async ({ position, lookAt, width, height, viewDistance }) => {
+      const png = await takeScreenshot(ctx.bots.bot, { position, lookAt, width, height, viewDistance });
       return { content: [{ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }] };
     }),
   );

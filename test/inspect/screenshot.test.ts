@@ -1,6 +1,15 @@
 import { describe, expect, test } from "vitest";
 import { UserFacingError } from "../../src/errors.js";
-import { holdInAir, screenshotUnavailable, serialized, translate, viewerVersionFor, waitForStableFrame } from "../../src/inspect/screenshot.js";
+import {
+  holdInAir,
+  screenshotUnavailable,
+  serialized,
+  translate,
+  viewerVersionFor,
+  waitForMeshes,
+  waitForStableFrame,
+  type MeshState,
+} from "../../src/inspect/screenshot.js";
 
 describe("screenshotUnavailable", () => {
   test("chrome missing suggests installing chrome", () => {
@@ -58,6 +67,33 @@ describe("waitForStableFrame", () => {
     let n = 0;
     const out = await waitForStableFrame(async () => Uint8Array.from([n++ % 256]), { minMs: 0, intervalMs: 5, maxMs: 30 });
     expect(out[0]).toBe(n - 1);
+  });
+});
+
+describe("waitForMeshes", () => {
+  const opts = { dirtiedBefore: 10, requireNew: true, quietMs: 50, intervalMs: 1, maxMs: 200 };
+  const seq = (states: MeshState[]) => {
+    let i = 0;
+    return async () => states[Math.min(i++, states.length - 1)];
+  };
+  test("waits for new sections to be queued and then finished", async () => {
+    const read = seq([
+      { outstanding: 0, dirtied: 10, msSinceDirty: 9999 }, // chunks not arrived yet: idle but nothing new
+      { outstanding: 5, dirtied: 15, msSinceDirty: 0 },
+      { outstanding: 0, dirtied: 15, msSinceDirty: 10 }, // done but not quiet yet
+      { outstanding: 0, dirtied: 15, msSinceDirty: 60 },
+    ]);
+    expect(await waitForMeshes(read, opts)).toBe(true);
+  });
+  test("without requireNew an idle page is ready at once", async () => {
+    let calls = 0;
+    const read = async () => (calls++, { outstanding: 0, dirtied: 10, msSinceDirty: 9999 });
+    expect(await waitForMeshes(read, { ...opts, requireNew: false })).toBe(true);
+    expect(calls).toBe(1);
+  });
+  test("gives up after maxMs", async () => {
+    const read = async () => ({ outstanding: 3, dirtied: 20, msSinceDirty: 0 });
+    expect(await waitForMeshes(read, { ...opts, maxMs: 20 })).toBe(false);
   });
 });
 

@@ -46,9 +46,27 @@ describe("applyBlueprint", () => {
 });
 
 describe("summarizeApplyResult", () => {
-  test("dry run keeps the command list", () => {
-    const r = { commands: ["/setblock 0 0 0 stone"], sent: 0, messages: [] };
-    expect(summarizeApplyResult(r, true)).toBe(r);
+  test("dry run returns the count and the first commands", () => {
+    const commands = Array.from({ length: 60 }, (_, i) => `/setblock ${i} 0 0 stone`);
+    expect(summarizeApplyResult({ commands, sent: 0, messages: [] }, true)).toEqual({
+      commandCount: 60,
+      commands: commands.slice(0, 50),
+      commandsTruncated: 10,
+    });
+  });
+  test("small dry run keeps every command", () => {
+    expect(summarizeApplyResult({ commands: ["/setblock 0 0 0 stone"], sent: 0, messages: [] }, true)).toEqual({
+      commandCount: 1,
+      commands: ["/setblock 0 0 0 stone"],
+      commandsTruncated: 0,
+    });
+  });
+  test("counts no-op feedback separately from errors", () => {
+    const r = summarizeApplyResult(
+      { commands: [], sent: 3, messages: ["Could not set the block", "No blocks were filled", "Unknown block type 'x'"] },
+      false,
+    );
+    expect(r).toMatchObject({ successMessages: 0, unchangedMessages: 2, otherMessages: ["Unknown block type 'x'"] });
   });
   test("counts routine success messages and keeps only the others", () => {
     const r = summarizeApplyResult(
@@ -68,6 +86,7 @@ describe("summarizeApplyResult", () => {
       commandCount: 3,
       sent: 3,
       successMessages: 3,
+      unchangedMessages: 0,
       otherMessages: ["Unknown block type 'minecraft:bogus'"],
       otherMessagesTruncated: 0,
     });
