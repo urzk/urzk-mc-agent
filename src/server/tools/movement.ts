@@ -3,6 +3,7 @@ import type { Bot } from "mineflayer";
 import pathfinderPkg from "mineflayer-pathfinder";
 import { Vec3 } from "vec3";
 import { z } from "zod";
+import { allowDoors, closedDoorsNear, startDoorOpener } from "../../bot/doors.js";
 import { activateAndWait } from "../../bot/interact.js";
 import { giveItem } from "../../bot/inventory.js";
 import { chooseReferenceFace } from "../../bot/placement.js";
@@ -38,13 +39,24 @@ function blockOrThrow(bot: Bot, x: number, y: number, z: number) {
 async function moveTo(bot: Bot, x: number, y: number, z: number, timeoutMs: number): Promise<void> {
   const movements = new Movements(bot);
   movements.canDig = false;
+  allowDoors(movements);
   bot.pathfinder.setMovements(movements);
+  // Path search time per attempt: the library default is 5s regardless of timeoutMs.
+  bot.pathfinder.thinkTimeout = Math.min(Math.max(5000, Math.floor(timeoutMs / 3)), 20000);
+  const stopDoors = startDoorOpener(bot);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`${timeoutMs}ms 以内に到達できませんでした`)), timeoutMs);
   });
-  const fail = (reason: string) =>
-    new UserFacingError(`移動できませんでした (${reason})。現在地: ${posOf(bot).join(", ")}`);
+  const fail = (reason: string) => {
+    const at = (bx: number, by: number, bz: number) => bot.blockAt(new Vec3(bx, by, bz));
+    const doors = closedDoorsNear(at, bot.entity.position, 3);
+    const hint = doors.length
+      ? ` 近くに閉じたドアがあります: ${doors.map((d) => `${d.name} @ ${d.pos.join(",")}`).join(", ")}` +
+        (doors.some((d) => d.name === "iron_door") ? "(鉄のドアは手では開かないので、ボタンやレバーで開けてください)" : "")
+      : "";
+    return new UserFacingError(`移動できませんでした (${reason})。現在地: ${posOf(bot).join(", ")}${hint}`);
+  };
   try {
     await Promise.race([bot.pathfinder.goto(new goals.GoalNear(x, y, z, 1)), timeout]);
   } catch (e) {
@@ -52,6 +64,7 @@ async function moveTo(bot: Bot, x: number, y: number, z: number, timeoutMs: numb
     throw fail(e instanceof Error ? e.message : String(e));
   } finally {
     clearTimeout(timer);
+    stopDoors();
   }
 }
 
@@ -59,7 +72,7 @@ export function registerMovementTools(server: McpServer, ctx: ToolContext): void
   server.registerTool(
     "move_to",
     {
-      description: "Walk to within 1 block of a position using pathfinding (no digging). Fails with the current position on timeout or no path.",
+      description: "Walk to within 1 block of a position using pathfinding (no digging). Opens wooden doors on the way (not iron doors). Fails with the current position on timeout or no path, plus any closed doors nearby.",
       inputSchema: { ...Pos, timeoutMs: z.number().int().min(1).max(120000).default(30000) },
     },
     safe(async ({ x, y, z: zc, timeoutMs }) => {
