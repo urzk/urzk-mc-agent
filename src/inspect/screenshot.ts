@@ -9,27 +9,30 @@ const DEFAULT_WIDTH = 1024;
 const DEFAULT_HEIGHT = 576;
 const RENDER_WAIT_MS = 3000;
 const CANVAS_TIMEOUT_MS = 30_000;
+const VIEW_DISTANCE = 6;
 
-type Session = {
-  bot: Bot;
-  port: number;
-  browser: { close(): Promise<void> };
-  page: {
-    setViewport(v: { width: number; height: number }): Promise<void>;
-    goto(url: string): Promise<unknown>;
-    waitForSelector(sel: string, o: { timeout: number }): Promise<unknown>;
-    screenshot(o: { type: "png" }): Promise<Uint8Array>;
-  };
+type Page = {
+  setViewport(v: { width: number; height: number }): Promise<void>;
+  goto(url: string): Promise<unknown>;
+  waitForSelector(sel: string, o: { timeout: number }): Promise<unknown>;
+  screenshot(o: { type: "png" }): Promise<Uint8Array>;
 };
+type Session = { bot: Bot; closeViewer(): Promise<void>; browser: { close(): Promise<void> }; page: Page };
 
 let session: Session | undefined;
 let starting: Promise<Session> | undefined;
+let queue: Promise<unknown> = Promise.resolve();
 
 export function screenshotUnavailable(cause: unknown): UserFacingError {
   const reason = cause instanceof Error ? cause.message : String(cause);
-  return new UserFacingError(
-    `screenshot unavailable: ${reason}. Run \`npx puppeteer browsers install chrome\` once, then retry.`,
-  );
+  const missing = /Cannot find (?:module|package) '([^']+)'/.exec(reason);
+  let hint = "";
+  if (/Could not find Chrome|Browser was not found|Could not find expected browser/i.test(reason)) {
+    hint = " Run `npx puppeteer browsers install chrome` once, then retry.";
+  } else if (missing) {
+    hint = ` Try \`npm rebuild ${missing[1]}\` or \`npm install\`, then retry.`;
+  }
+  return new UserFacingError(`screenshot unavailable: ${reason}.${hint}`);
 }
 
 function freePort(): Promise<number> {
@@ -43,23 +46,83 @@ function freePort(): Promise<number> {
   });
 }
 
-async function startSession(bot: Bot): Promise<Session> {
-  try {
-    const [viewer, puppeteer] = await Promise.all([import("prismarine-viewer"), import("puppeteer")]);
-    const port = await freePort();
-    // prismarine-viewer only logs via console.log (redirected to stderr by stdoutGuard).
-    viewer.mineflayer(bot, { firstPerson: true, viewDistance: 6, port });
-    let browser;
-    try {
-      browser = await puppeteer.default.launch({ headless: true, timeout: 30_000 });
-    } catch (e) {
-      (bot as unknown as { viewer?: { close(): void } }).viewer?.close();
-      throw e;
+// Deep imports are loaded by variable specifier: they are untyped CJS and must not be resolved at module load.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const load = (m: string): Promise<any> => import(m);
+
+/**
+ * Minimal re-implementation of prismarine-viewer's mineflayer() server. The top-level package needs the
+ * native `canvas` module, listens on all interfaces, and lets malformed 'mouseClick' payloads crash Node.
+ */
+async function startViewer(bot: Bot, port: number): Promise<() => Promise<void>> {
+  const [{ default: http }, { default: express }, { Server }, wv, common] = await Promise.all([
+    load("node:http"),
+    load("express"),
+    load("socket.io"),
+    load("prismarine-viewer/viewer/lib/worldView.js"),
+    load("prismarine-viewer/lib/common.js"),
+  ]);
+  const WorldView = wv.WorldView ?? wv.default?.WorldView;
+  const setupRoutes = common.setupRoutes ?? common.default?.setupRoutes;
+  const app = express();
+  const httpServer = http.createServer(app);
+  const io = new Server(httpServer, { path: "/socket.io" });
+  setupRoutes(app, "");
+  let active: unknown;
+
+  io.on("connection", (socket: any) => {
+    if (active) {
+      socket.disconnect(true);
+      return;
     }
-    const page = await browser.newPage();
+    active = socket;
+    socket.emit("version", bot.version);
+    const worldView = new WorldView(bot.world, VIEW_DISTANCE, bot.entity.position, socket);
+    socket.removeAllListeners("mouseClick"); // its async handler throws on malformed payloads
+    const swallow = (e: unknown) => console.error("viewer error:", e);
+    worldView.init(bot.entity.position).catch(swallow);
+    const botPosition = () => {
+      socket.emit("position", { pos: bot.entity.position, yaw: bot.entity.yaw, addMesh: true, pitch: bot.entity.pitch });
+      worldView.updatePosition(bot.entity.position).catch(swallow);
+    };
+    bot.on("move", botPosition);
+    worldView.listenToBot(bot);
+    socket.on("disconnect", () => {
+      bot.removeListener("move", botPosition);
+      worldView.removeListenersFromBot(bot);
+      if (active === socket) active = undefined;
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once("error", reject);
+    httpServer.listen(port, "127.0.0.1", () => {
+      httpServer.removeListener("error", reject);
+      httpServer.on("error", (e: unknown) => console.error("viewer server error:", e));
+      resolve();
+    });
+  });
+  return () =>
+    new Promise<void>((resolve) => {
+      io.close(() => resolve()); // also closes the http server and disconnects sockets
+    });
+}
+
+async function startSession(bot: Bot): Promise<Session> {
+  let closeViewer: (() => Promise<void>) | undefined;
+  let browser: { close(): Promise<void> } | undefined;
+  try {
+    const puppeteer = await import("puppeteer");
+    const port = await freePort();
+    closeViewer = await startViewer(bot, port);
+    const launched = await puppeteer.default.launch({ headless: true, timeout: 30_000 });
+    browser = launched;
+    const page = await launched.newPage();
     await page.goto(`http://localhost:${port}`);
-    return { bot, port, browser, page } as unknown as Session;
+    return { bot, closeViewer, browser, page } as unknown as Session;
   } catch (e) {
+    await browser?.close().catch(() => {});
+    await closeViewer?.().catch(() => {});
     throw screenshotUnavailable(e);
   }
 }
@@ -80,15 +143,25 @@ export async function closeScreenshot(): Promise<void> {
   const s = session ?? (pending ? await pending.catch(() => undefined) : undefined);
   session = undefined;
   if (!s) return;
-  try {
-    (s.bot as unknown as { viewer?: { close(): void } }).viewer?.close();
-  } catch (e) {
-    console.error("viewer close failed:", e);
-  }
+  await s.closeViewer().catch((e: unknown) => console.error("viewer close failed:", e));
   await s.browser.close().catch((e: unknown) => console.error("browser close failed:", e));
 }
 
-export async function takeScreenshot(
+/** Runs `fn` after all previously queued jobs; a failed job does not break the chain. */
+export function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(fn, fn);
+  queue = run.catch(() => {});
+  return run;
+}
+
+export function takeScreenshot(
+  bot: Bot,
+  opts: { position: Vec3Tuple; lookAt: Vec3Tuple; width?: number; height?: number },
+): Promise<Buffer> {
+  return serialized(() => capture(bot, opts));
+}
+
+async function capture(
   bot: Bot,
   opts: { position: Vec3Tuple; lookAt: Vec3Tuple; width?: number; height?: number },
 ): Promise<Buffer> {
