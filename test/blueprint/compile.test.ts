@@ -55,3 +55,20 @@ describe("compileBlueprint", () => {
     P({ ops: [{ op: "fill", from: [0, 0, 0], to: [9999, 255, 9999], block: "stone" }] }), [0, 0, 0]))
     .toThrow(BlueprintError));
 });
+
+test("fill with replace adds the filter", () =>
+  expect(
+    compileBlueprint(
+      P({ palette: { G: "glass" }, ops: [{ op: "fill", from: [0, 0, 0], to: [1, 1, 1], block: "tinted_glass", replace: "G" }] }),
+      [0, 0, 0],
+    ),
+  ).toEqual(["/fill 0 0 0 1 1 1 tinted_glass replace glass"]));
+
+test("split replace fill keeps the filter on every piece", () => {
+  const cmds = compileBlueprint(
+    P({ ops: [{ op: "fill", from: [0, 0, 0], to: [63, 63, 15], block: "stone", replace: "dirt" }] }),
+    [0, 0, 0],
+  );
+  expect(cmds.length).toBeGreaterThan(1);
+  for (const c of cmds) expect(c.endsWith(" stone replace dirt")).toBe(true);
+});

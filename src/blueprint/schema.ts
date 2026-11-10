@@ -16,7 +16,15 @@ export const BlueprintSchema = z.object({
   ops: z
     .array(
       z.discriminatedUnion("op", [
-        z.object({ op: z.literal("fill"), from: Coord, to: Coord, block: Block }).describe("直方体を block で埋める"),
+        z
+          .object({
+            op: z.literal("fill"),
+            from: Coord,
+            to: Coord,
+            block: Block,
+            replace: Block.optional().describe("指定すると、範囲内のこのブロックだけを block に置き換える（/fill ... replace）"),
+          })
+          .describe("直方体を block で埋める（replace 指定時は置換）"),
         z.object({ op: z.literal("hollow"), from: Coord, to: Coord, block: Block }).describe("外殻だけ block、内部は air"),
         z.object({ op: z.literal("set"), at: Coord, block: Block }).describe("1ブロック設置"),
         z

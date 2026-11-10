@@ -1,4 +1,5 @@
-import { posKey, type BlockSpec } from "../types.js";
+import { parsePosKey, posKey, type BlockSpec } from "../types.js";
+import { blockMatches } from "./blockSpec.js";
 import { normalizeBox } from "./box.js";
 import { resolveBlock, type Blueprint } from "./schema.js";
 
@@ -11,6 +12,20 @@ export function expandBlueprint(bp: Blueprint): { voxels: Map<string, BlockSpec>
     switch (op.op) {
       case "fill":
       case "hollow": {
+        if (op.op === "fill" && op.replace) {
+          // Only voxels set by earlier ops are known: replace those that match the filter. The rest of the box
+          // depends on what was already in the world, so the op is also reported as (partly) skipped.
+          const filter = resolveBlock(bp, op.replace);
+          const block = resolveBlock(bp, op.block);
+          const [min, max] = normalizeBox(op.from, op.to);
+          for (const [key, spec] of voxels) {
+            const [x, y, z] = parsePosKey(key);
+            const inside = x >= min[0] && x <= max[0] && y >= min[1] && y <= max[1] && z >= min[2] && z <= max[2];
+            if (inside && blockMatches(filter, spec)) voxels.set(key, block);
+          }
+          skippedOps.push(i);
+          break;
+        }
         const block = resolveBlock(bp, op.block);
         const [min, max] = normalizeBox(op.from, op.to);
         for (let x = min[0]; x <= max[0]; x++)

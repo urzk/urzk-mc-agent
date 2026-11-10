@@ -27,6 +27,7 @@ function opVolumeSum(bp: Blueprint): number {
     switch (op.op) {
       case "fill":
       case "hollow":
+        if (op.op === "fill" && op.replace) break;
         sum += boxVolume(...normalizeBox(op.from, op.to));
         break;
       case "set":

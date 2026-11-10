@@ -34,7 +34,7 @@ export function compileBlueprint(bp: Blueprint, origin: Vec3Tuple, opts: { maxCo
       case "fill": {
         const block = formatBlockSpec(resolveBlock(bp, op.block));
         const [min, max] = normalizeBox(abs(origin, op.from), abs(origin, op.to));
-        fillBox(min, max, block);
+        fillBox(min, max, block, op.replace ? ` replace ${formatBlockSpec(resolveBlock(bp, op.replace))}` : "");
         break;
       }
       case "hollow": {

@@ -32,3 +32,26 @@ test("thin hollow box is fully shell", () => {
   const { voxels } = expandBlueprint(BlueprintSchema.parse({ ops: [{ op: "hollow", from: [0, 0, 0], to: [1, 1, 1], block: "stone" }] }));
   expect([...voxels.values()].every((b) => b.name === "stone")).toBe(true);
 });
+
+test("replace fill skipped", () => {
+  const r = expandBlueprint(
+    BlueprintSchema.parse({ ops: [{ op: "fill", from: [0, 0, 0], to: [1, 0, 0], block: "stone", replace: "dirt" }] }),
+  );
+  expect(r.skippedOps).toEqual([0]);
+  expect(r.voxels.size).toBe(0);
+});
+
+test("replace fill rewrites matching voxels from earlier ops", () => {
+  const r = expandBlueprint(
+    BlueprintSchema.parse({
+      ops: [
+        { op: "fill", from: [0, 0, 0], to: [2, 0, 0], block: "stone" },
+        { op: "set", at: [1, 0, 0], block: "glass" },
+        { op: "set", at: [5, 0, 0], block: "glass" },
+        { op: "fill", from: [0, 0, 0], to: [2, 0, 0], block: "tinted_glass", replace: "glass" },
+      ],
+    }),
+  );
+  expect(r.skippedOps).toEqual([3]);
+  expect([0, 1, 2, 5].map((x) => r.voxels.get(`${x},0,0`)?.name)).toEqual(["stone", "tinted_glass", "stone", "glass"]);
+});
