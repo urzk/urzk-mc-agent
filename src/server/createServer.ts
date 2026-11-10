@@ -5,6 +5,7 @@ import { registerBlueprintTools } from "./tools/blueprint.js";
 import { registerCommandTools } from "./tools/commands.js";
 import { registerConnectionTools } from "./tools/connection.js";
 import { registerInspectTools } from "./tools/inspect.js";
+import { registerInventoryTools } from "./tools/inventory.js";
 
 export type ToolContext = { bots: BotManager; config: AppConfig };
 
@@ -29,5 +30,6 @@ export function createServer(ctx: ToolContext): McpServer {
   registerCommandTools(server, ctx);
   registerInspectTools(server, ctx);
   registerBlueprintTools(server, ctx);
+  registerInventoryTools(server, ctx);
   return server;
 }

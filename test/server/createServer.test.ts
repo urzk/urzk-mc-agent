@@ -22,6 +22,14 @@ describe("createServer", () => {
       expect.arrayContaining(["read_blocks", "get_block", "wait_ticks", "apply_blueprint", "verify_blueprint"]),
     );
   });
+  test("lists inventory tools", async () => {
+    const names = await listToolNames(makeServer());
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "get_inventory", "set_hotbar_slot", "give_item", "equip", "drop", "open_container", "container_transfer",
+      ]),
+    );
+  });
   test("inspection and blueprint tools without connection return isError", async () => {
     for (const [name, args] of [
       ["read_blocks", { from: [0, 0, 0], to: [1, 1, 1], format: "list" }],
