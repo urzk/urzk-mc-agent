@@ -1,10 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { Bot } from "mineflayer";
 import { giveItem } from "../../src/bot/inventory.js";
 import { UserFacingError } from "../../src/errors.js";
 
 function fakeInventoryBot(opts: { quickBarSlot?: number; creativeFails?: boolean }) {
   const sent: string[] = [];
+  const listeners: ((m: string, p: string) => void)[] = [];
   const set: { slot: number; type: number; count: number }[] = [];
   const bot = {
     version: "1.20.4",
@@ -16,8 +17,12 @@ function fakeInventoryBot(opts: { quickBarSlot?: number; creativeFails?: boolean
         set.push({ slot, type: item.type, count: item.count });
       },
     },
-    chat: (m: string) => void sent.push(m),
-    on: () => bot,
+    username: "Builder",
+    chat: (m: string) => {
+      sent.push(m);
+      for (const l of listeners) l("Unknown command", "system");
+    },
+    on: (_: string, fn: (m: string, p: string) => void) => (listeners.push(fn), bot),
     off: () => bot,
     sent,
     set,
@@ -36,8 +41,12 @@ describe("giveItem", () => {
   });
   test("falls back to /give", async () => {
     const bot = fakeInventoryBot({ creativeFails: true });
-    expect((await giveItem(bot, "stone", 1)).method).toBe("command");
-    expect(bot.sent).toContain("/give @s stone 1");
+    vi.useFakeTimers();
+    const p = giveItem(bot, "stone", 1);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(await p).toEqual({ method: "command", messages: ["Unknown command"] });
+    expect(bot.sent).toContain("/give Builder stone 1");
+    vi.useRealTimers();
   });
   test("unknown item", async () => {
     await expect(giveItem(fakeInventoryBot({}), "nope", 1)).rejects.toThrow(UserFacingError);

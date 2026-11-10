@@ -118,7 +118,7 @@ async function startSession(bot: Bot): Promise<Session> {
     const launched = await puppeteer.default.launch({ headless: true, timeout: 30_000 });
     browser = launched;
     const page = await launched.newPage();
-    await page.goto(`http://localhost:${port}`);
+    await page.goto(`http://127.0.0.1:${port}`);
     return { bot, closeViewer, browser, page } as unknown as Session;
   } catch (e) {
     await browser?.close().catch(() => {});

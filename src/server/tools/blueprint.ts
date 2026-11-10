@@ -23,12 +23,12 @@ export function registerBlueprintTools(server: McpServer, ctx: ToolContext): voi
       inputSchema: { blueprint: BlueprintSchema, origin: Origin, dryRun: z.boolean().optional() },
     },
     safe(async ({ blueprint, origin, dryRun }) => {
-      const bot = ctx.bots.bot;
+      // The bot is read lazily so that dryRun works without a connection.
       const result = await applyBlueprint(
-        { teleport: (pos) => teleportBot(bot, pos), run: (commands) => runCommands(bot, commands) },
+        { teleport: (pos) => teleportBot(ctx.bots.bot, pos), run: (commands) => runCommands(ctx.bots.bot, commands) },
         blueprint,
         origin,
-        { dryRun },
+        { dryRun, selfName: ctx.bots.status().username },
       );
       return jsonResult(result);
     }),

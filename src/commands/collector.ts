@@ -1,3 +1,5 @@
+import { UserFacingError } from "../errors.js";
+
 export interface ChatBot {
   chat(msg: string): void;
   on(ev: "messagestr", fn: (msg: string, position: string) => void): unknown;
@@ -6,9 +8,16 @@ export interface ChatBot {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+const MAX_COMMAND_LENGTH = 256;
+
 export function normalizeCommand(cmd: string): string {
   const t = cmd.trim();
-  return t.startsWith("/") ? t : `/${t}`;
+  const normalized = t.startsWith("/") ? t : `/${t}`;
+  // mineflayer's bot.chat splits longer messages into several chat lines, which breaks the command.
+  if (normalized.length > MAX_COMMAND_LENGTH) {
+    throw new UserFacingError(`コマンドが長すぎます (${normalized.length} 文字、上限 ${MAX_COMMAND_LENGTH})。分割してください。`);
+  }
+  return normalized;
 }
 
 /** Runs `body` while collecting chat messages (action bar excluded); always detaches the listener. */
@@ -46,11 +55,12 @@ export async function runCommands(
 ): Promise<{ sent: number; messages: string[] }> {
   const delayMs = opts.delayMs ?? 50;
   const collectMs = opts.collectMs ?? 1000;
+  const normalized = commands.map(normalizeCommand); // validate every command before sending any
   let sent = 0;
   const messages = await withCollector(bot, async () => {
-    for (const [i, cmd] of commands.entries()) {
+    for (const [i, cmd] of normalized.entries()) {
       if (i > 0) await sleep(delayMs);
-      bot.chat(normalizeCommand(cmd));
+      bot.chat(cmd);
       sent++;
     }
     await sleep(collectMs);

@@ -29,7 +29,7 @@ npm run build
 
 `connect` ツールの引数で上書きもできます。
 
-`.env` と `.cache` は**カレントディレクトリ基準**で読み書きされます。必ずプロジェクトルートから起動してください（同梱の `.mcp.json` はそうなります）。
+`.env` と `.cache` はカレントディレクトリではなく**パッケージルート基準**（`dist/` の一つ上）で読み書きされます。どのディレクトリから起動しても同じ場所が使われます。
 
 ## Claude Code への登録
 
@@ -39,7 +39,7 @@ npm run build
 {"mcpServers":{"minecraft":{"command":"node","args":["dist/index.js"]}}}
 ```
 
-別の場所から使う場合は、`.env` を読ませるためプロジェクトルートを作業ディレクトリにして登録してください。
+別のプロジェクトから使う場合は、絶対パスで登録してください（`.env` はこのパッケージ直下のものが読まれます）。
 
 ```bash
 claude mcp add minecraft -- node /abs/path/to/urzk-mc-agent/dist/index.js
@@ -53,7 +53,7 @@ claude mcp add minecraft -- node /abs/path/to/urzk-mc-agent/dist/index.js
 
 1. 返された URL をブラウザで開き、コードを入力してサインインする
 2. `get_status` を繰り返し呼び、`connected: true` になるのを待つ
-3. トークンは `.cache/msa`（カレントディレクトリ基準）にキャッシュされ、次回以降はコード入力が不要
+3. トークンは パッケージ直下の `.cache/msa`にキャッシュされ、次回以降はコード入力が不要
 
 ## ツール一覧
 

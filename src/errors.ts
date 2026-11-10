@@ -19,7 +19,7 @@ export class NotConnectedError extends UserFacingError {
 
 export class NotLoadedError extends UserFacingError {
   constructor(public readonly pos: Vec3Tuple) {
-    super(`チャンクが未ロードです: ${pos.join(",")}`);
+    super(`チャンクが未ロードです: ${pos.join(",")}。範囲の近くへ teleport してから再実行してください（広い範囲は分割してください）`);
   }
 }
 

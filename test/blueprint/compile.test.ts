@@ -43,6 +43,9 @@ describe("compileBlueprint", () => {
   test("we op with pos and pos1/pos2", () => expect(compileBlueprint(
     P({ ops: [{ op: "we", command: "//set glass", pos: [0, 5, 0], pos1: [0, 0, 0], pos2: [3, 3, 3] }] }), [10, 60, 10]))
     .toEqual(["/tp @s 10 65 10", "//pos1 10,60,10", "//pos2 13,63,13", "//set glass"]));
+  test("we op uses selfName for tp", () => expect(compileBlueprint(
+    P({ ops: [{ op: "we", command: "//undo", pos: [0, 5, 0] }] }), [10, 60, 10], { selfName: "Builder" }))
+    .toEqual(["/tp Builder 10 65 10", "//undo"]));
   test("we op with command only", () => expect(compileBlueprint(
     P({ ops: [{ op: "we", command: "//undo" }] }), [1, 2, 3])).toEqual(["//undo"]));
   test("command limit", () => expect(() => compileBlueprint(

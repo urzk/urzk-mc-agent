@@ -50,7 +50,7 @@ describe("createServer", () => {
       ["read_blocks", { from: [0, 0, 0], to: [1, 1, 1], format: "list" }],
       ["get_block", { x: 0, y: 0, z: 0 }],
       ["wait_ticks", { n: 1 }],
-      ["apply_blueprint", { blueprint: { ops: [] }, origin: [0, 0, 0] }],
+      ["apply_blueprint", { blueprint: { ops: [{ op: "set", at: [0, 0, 0], block: "stone" }] }, origin: [0, 0, 0] }],
       ["verify_blueprint", { blueprint: { ops: [] }, origin: [0, 0, 0] }],
       ["move_to", { x: 0, y: 0, z: 0 }],
       ["teleport", { x: 0, y: 0, z: 0 }],
@@ -64,6 +64,24 @@ describe("createServer", () => {
       const res = await callTool(makeServer(), name, args as unknown as Record<string, unknown>);
       expect(res.isError, name).toBe(true);
     }
+  });
+  test("apply_blueprint dryRun works without a connection", async () => {
+    const res = await callTool(makeServer(), "apply_blueprint", {
+      blueprint: { ops: [{ op: "set", at: [0, 0, 0], block: "stone" }] },
+      origin: [1, 2, 3],
+      dryRun: true,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse(res.content[0].text).commands).toEqual(["/setblock 1 2 3 stone"]);
+  });
+  test("instructions mention creative gamemode", async () => {
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+    const [c, s] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "t", version: "0" });
+    await Promise.all([makeServer().connect(s), client.connect(c)]);
+    expect(client.getInstructions()).toMatch(/gamemode creative/);
+    await client.close();
   });
   test("run_command without connection returns isError", async () => {
     const res = await callTool(makeServer(), "run_command", { command: "/time set day" });

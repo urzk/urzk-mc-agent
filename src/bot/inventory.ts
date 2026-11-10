@@ -10,14 +10,14 @@ const GIVE_COLLECT_MS = 300;
 
 /**
  * Puts `count` of `item` into the inventory. Tries creative-mode slot setting first
- * (default slot = selected hotbar slot), then falls back to `/give @s`.
+ * (default slot = selected hotbar slot), then falls back to `/give <bot name>` (the returned chat messages show e.g. a permission denial).
  */
 export async function giveItem(
   bot: Bot,
   item: string,
   count: number,
   slot?: number,
-): Promise<{ method: "creative" | "command"; slot: number }> {
+): Promise<{ method: "creative"; slot: number } | { method: "command"; messages: string[] }> {
   const info = bot.registry.itemsByName[item];
   if (!info) throw new UserFacingError(`不明なアイテム名です: ${item}`);
   const targetSlot = slot ?? 36 + bot.quickBarSlot;
@@ -27,7 +27,7 @@ export async function giveItem(
     return { method: "creative", slot: targetSlot };
   } catch (e) {
     console.error("creative setInventorySlot failed, falling back to /give:", e);
-    await runCommand(bot, `/give @s ${item} ${count}`, GIVE_COLLECT_MS);
-    return { method: "command", slot: targetSlot };
+    const { messages } = await runCommand(bot, `/give ${bot.username} ${item} ${count}`, GIVE_COLLECT_MS);
+    return { method: "command", messages };
   }
 }

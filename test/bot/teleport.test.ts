@@ -5,6 +5,7 @@ import { UserFacingError } from "../../src/errors.js";
 
 function makeBot(at: [number, number, number]) {
   const bot = Object.assign(new EventEmitter(), {
+    username: "Builder",
     entity: { position: { x: at[0], y: at[1], z: at[2] } },
     chat: vi.fn(),
     waitForChunksToLoad: vi.fn(async () => {}),
@@ -29,7 +30,7 @@ describe("teleportBot", () => {
       }, 5);
     });
     await teleportBot(bot, [10, 64, 10]);
-    expect(bot.chat).toHaveBeenCalledWith("/tp @s 10 64 10");
+    expect(bot.chat).toHaveBeenCalledWith("/tp Builder 10 64 10");
     expect(order).toEqual(["moved", "chunks"]);
     expect(bot.listenerCount("forcedMove")).toBe(0);
     expect(bot.listenerCount("messagestr")).toBe(0);

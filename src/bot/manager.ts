@@ -1,7 +1,8 @@
 import mineflayer, { type Bot } from "mineflayer";
 import { pathfinder } from "mineflayer-pathfinder";
 import type { AppConfig } from "../config.js";
-import { NotConnectedError } from "../errors.js";
+import { NotConnectedError, UserFacingError } from "../errors.js";
+import { msaCacheDir } from "../paths.js";
 import type { Vec3Tuple } from "../types.js";
 
 export type StatusSnapshot = {
@@ -79,7 +80,7 @@ export class BotManager {
         username: cfg.username,
         auth: cfg.auth,
         version: cfg.version,
-        profilesFolder: ".cache/msa",
+        profilesFolder: msaCacheDir,
         logErrors: false, // mineflayer would console.log errors to stdout, corrupting the MCP stream
         onMsaCode: (data) =>
           settle(() =>
@@ -94,14 +95,16 @@ export class BotManager {
       this.current = bot;
       bot.loadPlugin(pathfinder);
 
-      const drop = (reason: string) => {
+      const drop = (reason: string, endBot = false) => {
         // Ignore events from a bot that has already been replaced or discarded.
         if (this.current !== bot) return;
         this.lastDisconnectReason = reason;
         this.current = undefined;
         this.spawned = false;
         this.notifyBotEnd();
-        settle(() => reject(new Error(`Connection failed: ${reason}`)));
+        // A protocol error may leave the socket open (ghost login); end() re-enters drop, which is ignored above.
+        if (endBot) bot.end();
+        settle(() => reject(new UserFacingError(`Connection failed: ${reason}`)));
       };
 
       bot.once("spawn", () => {
@@ -111,7 +114,7 @@ export class BotManager {
       bot.on("kicked", (reason) => drop(`kicked: ${typeof reason === "string" ? reason : JSON.stringify(reason)}`));
       bot.on("error", (err) => {
         console.error("bot error:", err);
-        drop(`error: ${err.message}`);
+        drop(`error: ${err.message}`, true);
       });
       bot.on("end", (reason) => drop(`disconnected: ${reason}`));
 
@@ -125,7 +128,7 @@ export class BotManager {
             this.lastDisconnectReason = `timed out waiting for spawn (${SPAWN_TIMEOUT_MS / 1000}s)`;
           }
           bot.end();
-          reject(new Error(`Connection failed: ${this.lastDisconnectReason}`));
+          reject(new UserFacingError(`Connection failed: ${this.lastDisconnectReason}`));
         });
       }, SPAWN_TIMEOUT_MS);
     });

@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { Bot } from "mineflayer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { UserFacingError } from "../../src/errors.js";
 import { normalizeCommand, runCommand, runCommands, type ChatBot } from "../../src/commands/collector.js";
 
 class FakeBot extends EventEmitter {
@@ -63,4 +64,14 @@ test("runCommands collects across sequence and detaches on error", async () => {
   };
   await expect(runCommands(bad, ["x"])).rejects.toThrow("boom");
   expect(bad.listenerCount("messagestr")).toBe(0);
+});
+
+test("rejects commands longer than 256 chars", async () => {
+  const long = "/say " + "a".repeat(252);
+  expect(() => normalizeCommand(long)).toThrow(UserFacingError);
+  const bot = fakeBot();
+  await expect(runCommand(bot, long)).rejects.toBeInstanceOf(UserFacingError);
+  await expect(runCommands(bot, ["/ok", long])).rejects.toBeInstanceOf(UserFacingError);
+  expect(bot.sent).toEqual([]);
+  expect(normalizeCommand("/" + "a".repeat(255))).toHaveLength(256);
 });

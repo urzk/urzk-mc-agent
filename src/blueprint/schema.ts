@@ -23,7 +23,7 @@ export const BlueprintSchema = z.object({
           .object({
             op: z.literal("layers"),
             at: Coord,
-            rows: z.array(z.array(z.string())).describe("rows[y][z] の文字列。文字 index が x。palette にない文字は無変更"),
+            rows: z.array(z.array(z.string())).describe("rows[y][z] の文字列。rows[0] が最下層（at.y）で y は上方向に増える。z は南 (+z) 方向、文字 index が x（東 (+x) 方向）。palette にない文字は無変更"),
           })
           .describe("文字パターンによる層ごとの配置"),
         z

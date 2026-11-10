@@ -49,7 +49,7 @@ export function registerInventoryTools(server: McpServer, ctx: ToolContext): voi
     "give_item",
     {
       description:
-        "Get an item (creative inventory, falling back to /give @s). Goes to the selected hotbar slot unless slot (inventory slot index, hotbar = 36-44) is given.",
+        "Get an item (creative inventory, falling back to /give <bot name>; the fallback returns the server chat messages). Goes to the selected hotbar slot unless slot (inventory slot index, hotbar = 36-44) is given.",
       inputSchema: { item: z.string().min(1), count: z.number().int().min(1).max(64).default(1), slot: z.number().int().min(0).max(45).optional() },
     },
     safe(async ({ item, count, slot }) => jsonResult(await giveItem(ctx.bots.bot, item, count, slot))),

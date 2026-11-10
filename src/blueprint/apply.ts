@@ -18,9 +18,9 @@ export async function applyBlueprint(
   deps: ApplyDeps,
   bp: Blueprint,
   origin: Vec3Tuple,
-  opts: { dryRun?: boolean; maxCommands?: number } = {},
+  opts: { dryRun?: boolean; maxCommands?: number; selfName?: string } = {},
 ): Promise<{ commands: string[]; sent: number; messages: string[] }> {
-  const commands = compileBlueprint(bp, origin, { maxCommands: opts.maxCommands });
+  const commands = compileBlueprint(bp, origin, { maxCommands: opts.maxCommands, selfName: opts.selfName });
   const center = blueprintCenter(bp, origin);
   if (opts.dryRun || commands.length === 0 || !center) return { commands, sent: 0, messages: [] };
   await deps.teleport(center);

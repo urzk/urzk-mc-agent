@@ -22,6 +22,7 @@ Typical flow:
 6. Use screenshot when you need to check how it looks.
 
 Notes:
+- Building needs creative mode: if get_status.gameMode is not "creative", run "/gamemode creative" first.
 - If a tool reports the bot is not connected (or was kicked), call connect again; there is no automatic reconnect.
 - With auth=microsoft, connect first returns a device code: ask the user to sign in at the given URL, then poll get_status.
 - Command failures (no permission, bad syntax) show up in the chat messages returned by run_command / run_commands.`;

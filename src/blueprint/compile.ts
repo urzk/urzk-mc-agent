@@ -9,7 +9,8 @@ const DEFAULT_MAX_COMMANDS = 2000;
 
 const abs = (o: Vec3Tuple, p: Vec3Tuple): Vec3Tuple => [o[0] + p[0], o[1] + p[1], o[2] + p[2]];
 
-export function compileBlueprint(bp: Blueprint, origin: Vec3Tuple, opts: { maxCommands?: number } = {}): string[] {
+export function compileBlueprint(bp: Blueprint, origin: Vec3Tuple, opts: { maxCommands?: number; selfName?: string } = {}): string[] {
+  const selfName = opts.selfName ?? "@s";
   const maxCommands = opts.maxCommands ?? DEFAULT_MAX_COMMANDS;
   const cmds: string[] = [];
 
@@ -87,7 +88,7 @@ export function compileBlueprint(bp: Blueprint, origin: Vec3Tuple, opts: { maxCo
         break;
       }
       case "we": {
-        if (op.pos) push(`/tp @s ${abs(origin, op.pos).join(" ")}`);
+        if (op.pos) push(`/tp ${selfName} ${abs(origin, op.pos).join(" ")}`);
         if (op.pos1) push(`//pos1 ${abs(origin, op.pos1).join(",")}`);
         if (op.pos2) push(`//pos2 ${abs(origin, op.pos2).join(",")}`);
         push(op.command);

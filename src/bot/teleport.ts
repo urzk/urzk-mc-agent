@@ -5,6 +5,7 @@ import type { Vec3Tuple } from "../types.js";
 const TELEPORT_TIMEOUT_MS = 5000;
 
 type TeleportBot = {
+  username: string;
   entity: { position: { x: number; y: number; z: number } };
   chat(msg: string): void;
   on(ev: "messagestr", fn: (msg: string, position: string) => void): unknown;
@@ -36,7 +37,7 @@ export async function teleportBot(bot: TeleportBot, pos: Vec3Tuple): Promise<voi
     bot.on("messagestr", onMsg);
     let ok: boolean;
     try {
-      bot.chat(normalizeCommand(`/tp @s ${pos.join(" ")}`));
+      bot.chat(normalizeCommand(`/tp ${bot.username} ${pos.join(" ")}`));
       ok = await moved;
     } finally {
       clearTimeout(timer);
