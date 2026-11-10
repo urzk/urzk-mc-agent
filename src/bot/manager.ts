@@ -27,18 +27,23 @@ const SPAWN_TIMEOUT_MS = 60_000;
 
 export class BotManager {
   private current: Bot | undefined;
+  private spawned = false;
   private lastDisconnectReason: string | undefined;
 
   constructor(private readonly config: AppConfig) {}
 
   get bot(): Bot {
-    if (!this.current) throw new NotConnectedError(this.lastDisconnectReason);
+    if (!this.current || !this.spawned) {
+      const hint = this.current ? "接続処理中、または Microsoft ログイン待ちです。get_status で接続完了を確認してください" : undefined;
+      throw new NotConnectedError(this.lastDisconnectReason, hint);
+    }
     return this.current;
   }
 
   async connect(opts: ConnectOptions): Promise<ConnectResult> {
     this.disconnect();
     this.lastDisconnectReason = undefined;
+    this.spawned = false;
     const cfg = { ...this.config, ...stripUndefined(opts) };
 
     return new Promise<ConnectResult>((resolve, reject) => {
@@ -58,6 +63,7 @@ export class BotManager {
         auth: cfg.auth,
         version: cfg.version,
         profilesFolder: ".cache/msa",
+        logErrors: false, // mineflayer would console.log errors to stdout, corrupting the MCP stream
         onMsaCode: (data) =>
           settle(() =>
             resolve({
@@ -76,10 +82,14 @@ export class BotManager {
         if (this.current !== bot) return;
         this.lastDisconnectReason = reason;
         this.current = undefined;
+        this.spawned = false;
         settle(() => reject(new Error(`Connection failed: ${reason}`)));
       };
 
-      bot.once("spawn", () => settle(() => resolve({ state: "connected", status: this.status() })));
+      bot.once("spawn", () => {
+        if (this.current === bot) this.spawned = true;
+        settle(() => resolve({ state: "connected", status: this.status() }));
+      });
       bot.on("kicked", (reason) => drop(`kicked: ${typeof reason === "string" ? reason : JSON.stringify(reason)}`));
       bot.on("error", (err) => {
         console.error("bot error:", err);
@@ -92,6 +102,7 @@ export class BotManager {
         settle(() => {
           if (this.current === bot) {
             this.current = undefined;
+            this.spawned = false;
             this.lastDisconnectReason = `timed out waiting for spawn (${SPAWN_TIMEOUT_MS / 1000}s)`;
           }
           bot.end();
@@ -105,12 +116,13 @@ export class BotManager {
     const bot = this.current;
     if (!bot) return;
     this.current = undefined;
+    this.spawned = false;
     bot.end();
   }
 
   status(): StatusSnapshot {
     const bot = this.current;
-    if (!bot || !bot.entity) {
+    if (!bot || !this.spawned || !bot.entity) {
       return { connected: false, ...(this.lastDisconnectReason ? { lastDisconnectReason: this.lastDisconnectReason } : {}) };
     }
     const p = bot.entity.position;

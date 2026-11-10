@@ -35,3 +35,12 @@ describe("createServer", () => {
     expect(res.isError).toBeFalsy();
   });
 });
+
+describe("BotManager spawn gating", () => {
+  test("bot getter rejects a bot that has not spawned and hints at pending connect", () => {
+    const bots = new BotManager(loadConfig({}));
+    (bots as unknown as { current: object }).current = {};
+    expect(() => bots.bot).toThrow(/接続処理中/);
+    expect(bots.status().connected).toBe(false);
+  });
+});
