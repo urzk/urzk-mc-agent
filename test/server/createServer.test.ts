@@ -36,6 +36,12 @@ describe("createServer", () => {
       expect.arrayContaining(["move_to", "teleport", "look_at", "interact_block", "place_block", "dig_block"]),
     );
   });
+  test("run_script is registered only when enableScript is true", async () => {
+    expect(await listToolNames(makeServer())).toContain("run_script");
+    const config = loadConfig({ MC_AGENT_ENABLE_SCRIPT: "false" });
+    const off = createServer({ bots: new BotManager(config), config });
+    expect(await listToolNames(off)).not.toContain("run_script");
+  });
   test("inspection and blueprint tools without connection return isError", async () => {
     for (const [name, args] of [
       ["read_blocks", { from: [0, 0, 0], to: [1, 1, 1], format: "list" }],
@@ -49,6 +55,7 @@ describe("createServer", () => {
       ["interact_block", { x: 0, y: 0, z: 0 }],
       ["place_block", { x: 0, y: 0, z: 0, block: "stone" }],
       ["dig_block", { x: 0, y: 0, z: 0 }],
+      ["run_script", { code: "return 1" }],
     ] as const) {
       const res = await callTool(makeServer(), name, args as unknown as Record<string, unknown>);
       expect(res.isError, name).toBe(true);
