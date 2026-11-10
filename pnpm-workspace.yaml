@@ -1,0 +1,12 @@
+# The code imports these transitive dependencies of mineflayer / prismarine-viewer directly
+# (block state remapping for screenshots), so expose them at the top of node_modules.
+publicHoistPattern:
+  - minecraft-data
+  - prismarine-block
+  - prismarine-chunk
+
+# Install scripts stay disabled: esbuild works from its platform package, and Chrome for
+# screenshots is installed explicitly with `pnpm exec puppeteer browsers install chrome`.
+allowBuilds:
+  esbuild: false
+  puppeteer: false

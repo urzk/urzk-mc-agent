@@ -32,9 +32,9 @@ export function screenshotUnavailable(cause: unknown): UserFacingError {
   const missing = /Cannot find (?:module|package) '([^']+)'/.exec(reason);
   let hint = "";
   if (/Could not find Chrome|Browser was not found|Could not find expected browser/i.test(reason)) {
-    hint = " Run `npx puppeteer browsers install chrome` once, then retry.";
+    hint = " Run `pnpm exec puppeteer browsers install chrome` once, then retry.";
   } else if (missing) {
-    hint = ` Try \`npm rebuild ${missing[1]}\` or \`npm install\`, then retry.`;
+    hint = ` Try \`pnpm rebuild ${missing[1]}\` or \`pnpm install\`, then retry.`;
   }
   return new UserFacingError(`screenshot unavailable: ${reason}.${hint}`);
 }

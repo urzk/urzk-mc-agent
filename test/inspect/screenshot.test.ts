@@ -8,13 +8,13 @@ describe("screenshotUnavailable", () => {
       const e = screenshotUnavailable(new Error(msg));
       expect(e).toBeInstanceOf(UserFacingError);
       expect(e.message).toBe(
-        `screenshot unavailable: ${msg}. Run \`npx puppeteer browsers install chrome\` once, then retry.`,
+        `screenshot unavailable: ${msg}. Run \`pnpm exec puppeteer browsers install chrome\` once, then retry.`,
       );
     }
   });
   test("missing module names the module", () => {
     const e = screenshotUnavailable(new Error("Cannot find module 'express'\nRequire stack:"));
-    expect(e.message).toContain("`npm rebuild express`");
+    expect(e.message).toContain("`pnpm rebuild express`");
     expect(e.message).not.toContain("puppeteer browsers install");
   });
   test("other errors give the reason only", () => {

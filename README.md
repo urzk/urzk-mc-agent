@@ -11,9 +11,9 @@ Claude Code から Mineflayer 製の Minecraft Bot を操作して建築・確�
 ## セットアップ
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env   # 接続先を編集
-npm run build
+pnpm build
 ```
 
 ### `.env`
@@ -76,10 +76,10 @@ claude mcp add minecraft -- node /abs/path/to/urzk-mc-agent/dist/index.js
 
 ### `screenshot` の準備
 
-- npm はインストールスクリプトをスキップするため、初回のスクリーンショットの前に一度だけ次を実行してください。
+- インストールスクリプトは `pnpm-workspace.yaml` の `allowBuilds` で無効にしているため、初回のスクリーンショットの前に一度だけ次を実行してください。
 
   ```bash
-  npx puppeteer browsers install chrome
+  pnpm exec puppeteer browsers install chrome
   ```
 
 - ビューアは `127.0.0.1` のみで待ち受けます。
@@ -113,7 +113,7 @@ claude mcp add minecraft -- node /abs/path/to/urzk-mc-agent/dist/index.js
 実サーバーに接続して、小屋の建築 → 照合 → ドア操作 → スクリーンショット（`.cache/smoke.png`）までを通します。Bot が OP であること、スクリーンショット用に Chrome をインストール済みであることが前提です。
 
 ```bash
-npm run smoke
+pnpm smoke
 ```
 
 照合の差分が 0 件でドアの `open` が変化すれば終了コード 0、そうでなければ 1 です。
@@ -121,6 +121,6 @@ npm run smoke
 ## 開発
 
 ```bash
-npm test          # vitest
-npm run typecheck # src / test / scripts を型チェック
+pnpm test      # vitest
+pnpm typecheck # src / test / scripts を型チェック
 ```
