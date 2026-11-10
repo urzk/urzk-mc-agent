@@ -6,11 +6,14 @@ import { listBlocks, renderLayers } from "../../inspect/layers.js";
 import { makeBlockReader } from "../../inspect/blockReader.js";
 import { formatBlockSpec } from "../../blueprint/blockSpec.js";
 import type { ToolContext } from "../createServer.js";
+import { closeScreenshot, takeScreenshot } from "../../inspect/screenshot.js";
 import { jsonResult, safe } from "../result.js";
 
 const Coord = z.tuple([z.number().int(), z.number().int(), z.number().int()]);
 
 export function registerInspectTools(server: McpServer, ctx: ToolContext): void {
+  ctx.bots.onBotEnd(() => void closeScreenshot());
+
   server.registerTool(
     "read_blocks",
     {
@@ -49,6 +52,25 @@ export function registerInspectTools(server: McpServer, ctx: ToolContext): void 
     safe(async ({ n }) => {
       await ctx.bots.bot.waitForTicks(n);
       return jsonResult({ waited: n });
+    }),
+  );
+
+  server.registerTool(
+    "screenshot",
+    {
+      description:
+        "Take a first-person screenshot (PNG) from `position` looking at `lookAt`. Teleports the bot there (needs op). " +
+        "Waits a few seconds for chunk rendering; the first call also starts a headless browser. Default size 1024x576.",
+      inputSchema: {
+        position: Coord,
+        lookAt: Coord,
+        width: z.number().int().min(64).max(2048).optional(),
+        height: z.number().int().min(64).max(2048).optional(),
+      },
+    },
+    safe(async ({ position, lookAt, width, height }) => {
+      const png = await takeScreenshot(ctx.bots.bot, { position, lookAt, width, height });
+      return { content: [{ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }] };
     }),
   );
 }

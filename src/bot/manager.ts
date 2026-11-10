@@ -30,6 +30,8 @@ export class BotManager {
   private spawned = false;
   private lastDisconnectReason: string | undefined;
 
+  private readonly endListeners = new Set<() => void>();
+
   constructor(private readonly config: AppConfig) {}
 
   get bot(): Bot {
@@ -38,6 +40,21 @@ export class BotManager {
       throw new NotConnectedError(this.lastDisconnectReason, hint);
     }
     return this.current;
+  }
+
+  /** Registers a cleanup that runs whenever the current bot is disconnected or dropped. */
+  onBotEnd(fn: () => void): void {
+    this.endListeners.add(fn);
+  }
+
+  private notifyBotEnd(): void {
+    for (const fn of this.endListeners) {
+      try {
+        fn();
+      } catch (e) {
+        console.error("bot-end cleanup failed:", e);
+      }
+    }
   }
 
   async connect(opts: ConnectOptions): Promise<ConnectResult> {
@@ -83,6 +100,7 @@ export class BotManager {
         this.lastDisconnectReason = reason;
         this.current = undefined;
         this.spawned = false;
+        this.notifyBotEnd();
         settle(() => reject(new Error(`Connection failed: ${reason}`)));
       };
 
@@ -103,6 +121,7 @@ export class BotManager {
           if (this.current === bot) {
             this.current = undefined;
             this.spawned = false;
+            this.notifyBotEnd();
             this.lastDisconnectReason = `timed out waiting for spawn (${SPAWN_TIMEOUT_MS / 1000}s)`;
           }
           bot.end();
@@ -117,6 +136,7 @@ export class BotManager {
     if (!bot) return;
     this.current = undefined;
     this.spawned = false;
+    this.notifyBotEnd();
     bot.end();
   }
 

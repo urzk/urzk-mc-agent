@@ -36,6 +36,9 @@ describe("createServer", () => {
       expect.arrayContaining(["move_to", "teleport", "look_at", "interact_block", "place_block", "dig_block"]),
     );
   });
+  test("lists the screenshot tool", async () => {
+    expect(await listToolNames(makeServer())).toContain("screenshot");
+  });
   test("run_script is registered only when enableScript is true", async () => {
     expect(await listToolNames(makeServer())).toContain("run_script");
     const config = loadConfig({ MC_AGENT_ENABLE_SCRIPT: "false" });
@@ -56,6 +59,7 @@ describe("createServer", () => {
       ["place_block", { x: 0, y: 0, z: 0, block: "stone" }],
       ["dig_block", { x: 0, y: 0, z: 0 }],
       ["run_script", { code: "return 1" }],
+      ["screenshot", { position: [0, 0, 0], lookAt: [1, 0, 0] }],
     ] as const) {
       const res = await callTool(makeServer(), name, args as unknown as Record<string, unknown>);
       expect(res.isError, name).toBe(true);
