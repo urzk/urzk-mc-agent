@@ -4,12 +4,16 @@ import { Vec3 } from "vec3";
 import { teleportBot } from "../bot/teleport.js";
 import { UserFacingError } from "../errors.js";
 import type { Vec3Tuple } from "../types.js";
+import { createStateRemap, remapColumnJson, type StateRemap } from "./stateRemap.js";
 
 const DEFAULT_WIDTH = 1024;
 const DEFAULT_HEIGHT = 576;
-const RENDER_WAIT_MS = 3000;
 const CANVAS_TIMEOUT_MS = 30_000;
-const VIEW_DISTANCE = 6;
+const VIEW_DISTANCE = 4; // chunks; 6 was too heavy for slower machines
+/** Rendering is done when two frames taken FRAME_INTERVAL_MS apart are identical (or after MAX_RENDER_WAIT_MS). */
+const MIN_RENDER_WAIT_MS = 2000;
+const FRAME_INTERVAL_MS = 1000;
+const MAX_RENDER_WAIT_MS = 20_000;
 
 type Page = {
   setViewport(v: { width: number; height: number }): Promise<void>;
@@ -55,13 +59,17 @@ const load = (m: string): Promise<any> => import(m);
  * native `canvas` module, listens on all interfaces, and lets malformed 'mouseClick' payloads crash Node.
  */
 async function startViewer(bot: Bot, port: number): Promise<() => Promise<void>> {
-  const [{ default: http }, { default: express }, { Server }, wv, common] = await Promise.all([
+  const [{ default: http }, { default: express }, { Server }, wv, common, ver] = await Promise.all([
     load("node:http"),
     load("express"),
     load("socket.io"),
     load("prismarine-viewer/viewer/lib/worldView.js"),
     load("prismarine-viewer/lib/common.js"),
+    load("prismarine-viewer/viewer/lib/version.js"),
   ]);
+  const { getVersion, supportedVersions } = ver.default ?? ver;
+  const viewerVersion = viewerVersionFor(bot.version, getVersion, supportedVersions);
+  const remap = createStateRemap(bot.version, viewerVersion);
   const WorldView = wv.WorldView ?? wv.default?.WorldView;
   const setupRoutes = common.setupRoutes ?? common.default?.setupRoutes;
   const app = express();
@@ -76,9 +84,10 @@ async function startViewer(bot: Bot, port: number): Promise<() => Promise<void>>
       return;
     }
     active = socket;
-    socket.emit("version", bot.version);
-    const worldView = new WorldView(bot.world, VIEW_DISTANCE, bot.entity.position, socket);
-    socket.removeAllListeners("mouseClick"); // its async handler throws on malformed payloads
+    socket.emit("version", viewerVersion);
+    // WorldView only needs emit(); its 'mouseClick' handler (which throws on malformed payloads) is dropped.
+    const emitter = { on: () => {}, emit: (event: string, data: any) => socket.emit(event, translate(event, data, remap)) };
+    const worldView = new WorldView(bot.world, VIEW_DISTANCE, bot.entity.position, emitter);
     const swallow = (e: unknown) => console.error("viewer error:", e);
     worldView.init(bot.entity.position).catch(swallow);
     const botPosition = () => {
@@ -106,6 +115,23 @@ async function startViewer(bot: Bot, port: number): Promise<() => Promise<void>>
     new Promise<void>((resolve) => {
       io.close(() => resolve()); // also closes the http server and disconnects sockets
     });
+}
+
+/** The viewer ships assets for a fixed list of versions; newer servers fall back to the latest one. */
+export function viewerVersionFor(
+  version: string,
+  getVersion: (v: string) => string | null,
+  supported: string[],
+): string {
+  return getVersion(version) ?? supported[supported.length - 1];
+}
+
+/** Rewrites block state ids in viewer events when the viewer renders an older version's registry. */
+export function translate(event: string, data: any, remap: StateRemap | null): any {
+  if (!remap) return data;
+  if (event === "loadChunk") return { ...data, chunk: remapColumnJson(data.chunk, remap) };
+  if (event === "blockUpdate") return { ...data, stateId: remap(data.stateId) };
+  return data;
 }
 
 async function startSession(bot: Bot): Promise<Session> {
@@ -161,6 +187,27 @@ export function takeScreenshot(
   return serialized(() => capture(bot, opts));
 }
 
+/**
+ * Takes frames until two consecutive ones are identical, i.e. chunk meshing has finished.
+ * Slow machines need far more than a fixed delay; moving entities make it fall back to the max wait.
+ */
+export async function waitForStableFrame(
+  shoot: () => Promise<Uint8Array>,
+  opts = { minMs: MIN_RENDER_WAIT_MS, intervalMs: FRAME_INTERVAL_MS, maxMs: MAX_RENDER_WAIT_MS },
+): Promise<Buffer> {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const start = Date.now();
+  await sleep(opts.minMs);
+  let prev = Buffer.from(await shoot());
+  while (Date.now() - start < opts.maxMs) {
+    await sleep(opts.intervalMs);
+    const next = Buffer.from(await shoot());
+    if (next.equals(prev)) return next;
+    prev = next;
+  }
+  return prev;
+}
+
 async function capture(
   bot: Bot,
   opts: { position: Vec3Tuple; lookAt: Vec3Tuple; width?: number; height?: number },
@@ -171,8 +218,7 @@ async function capture(
   try {
     await s.page.setViewport({ width: opts.width ?? DEFAULT_WIDTH, height: opts.height ?? DEFAULT_HEIGHT });
     await s.page.waitForSelector("canvas", { timeout: CANVAS_TIMEOUT_MS });
-    await new Promise((r) => setTimeout(r, RENDER_WAIT_MS));
-    return Buffer.from(await s.page.screenshot({ type: "png" }));
+    return await waitForStableFrame(() => s.page.screenshot({ type: "png" }));
   } catch (e) {
     throw new UserFacingError(`screenshot failed: ${e instanceof Error ? e.message : String(e)}`);
   }

@@ -3,6 +3,7 @@ import type { Bot } from "mineflayer";
 import pathfinderPkg from "mineflayer-pathfinder";
 import { Vec3 } from "vec3";
 import { z } from "zod";
+import { activateAndWait } from "../../bot/interact.js";
 import { giveItem } from "../../bot/inventory.js";
 import { chooseReferenceFace } from "../../bot/placement.js";
 import { teleportBot } from "../../bot/teleport.js";
@@ -90,19 +91,17 @@ export function registerMovementTools(server: McpServer, ctx: ToolContext): void
   server.registerTool(
     "interact_block",
     {
-      description: "Right-click (activate) a block such as a lever, button or door; returns its { name, state } afterwards. Must be within 4.5 blocks.",
+      description: "Right-click (activate) a block such as a lever, button or door; waits up to 1s for the server to update it and returns { name, state, updated } (updated=false: the block did not change, e.g. a chest). Must be within 4.5 blocks.",
       inputSchema: Pos,
     },
     safe(async ({ x, y, z: zc }) => {
       const bot = ctx.bots.bot;
       const block = blockOrThrow(bot, x, y, zc);
       assertInReach(bot, x, y, zc);
-      await bot.activateBlock(block);
-      await bot.waitForTicks(1);
-      const after = blockOrThrow(bot, x, y, zc);
+      const { block: after, updated } = await activateAndWait(bot, block);
       const state: Record<string, string> = {};
       for (const [k, v] of Object.entries(after.getProperties())) state[k] = String(v);
-      return jsonResult({ name: after.name, state });
+      return jsonResult({ name: after.name, state, updated });
     }),
   );
 
