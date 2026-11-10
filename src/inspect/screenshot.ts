@@ -208,18 +208,42 @@ export async function waitForStableFrame(
   return prev;
 }
 
+type HoverBot = {
+  game: { gameMode: string };
+  entity: { velocity: { x: number; y: number; z: number } };
+  creative: { startFlying(): void; stopFlying(): void };
+};
+
+/**
+ * Keeps the bot where it is teleported (no gravity) so a camera position in mid-air is not lost to falling
+ * while the frame renders. Only in creative/spectator: elsewhere the server kicks players for flying.
+ * Returns a function that restores gravity.
+ */
+export function holdInAir(bot: HoverBot): () => void {
+  if (bot.game.gameMode !== "creative" && bot.game.gameMode !== "spectator") return () => {};
+  bot.creative.startFlying();
+  const v = bot.entity.velocity;
+  v.x = v.y = v.z = 0;
+  return () => bot.creative.stopFlying();
+}
+
 async function capture(
   bot: Bot,
   opts: { position: Vec3Tuple; lookAt: Vec3Tuple; width?: number; height?: number },
 ): Promise<Buffer> {
   const s = await getSession(bot);
-  await teleportBot(bot, opts.position);
-  await bot.lookAt(new Vec3(...opts.lookAt), true);
+  const release = holdInAir(bot);
   try {
-    await s.page.setViewport({ width: opts.width ?? DEFAULT_WIDTH, height: opts.height ?? DEFAULT_HEIGHT });
-    await s.page.waitForSelector("canvas", { timeout: CANVAS_TIMEOUT_MS });
-    return await waitForStableFrame(() => s.page.screenshot({ type: "png" }));
-  } catch (e) {
-    throw new UserFacingError(`screenshot failed: ${e instanceof Error ? e.message : String(e)}`);
+    await teleportBot(bot, opts.position);
+    await bot.lookAt(new Vec3(...opts.lookAt), true);
+    try {
+      await s.page.setViewport({ width: opts.width ?? DEFAULT_WIDTH, height: opts.height ?? DEFAULT_HEIGHT });
+      await s.page.waitForSelector("canvas", { timeout: CANVAS_TIMEOUT_MS });
+      return await waitForStableFrame(() => s.page.screenshot({ type: "png" }));
+    } catch (e) {
+      throw new UserFacingError(`screenshot failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  } finally {
+    release();
   }
 }

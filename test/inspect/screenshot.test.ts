@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { UserFacingError } from "../../src/errors.js";
-import { screenshotUnavailable, serialized, translate, viewerVersionFor, waitForStableFrame } from "../../src/inspect/screenshot.js";
+import { holdInAir, screenshotUnavailable, serialized, translate, viewerVersionFor, waitForStableFrame } from "../../src/inspect/screenshot.js";
 
 describe("screenshotUnavailable", () => {
   test("chrome missing suggests installing chrome", () => {
@@ -77,5 +77,35 @@ describe("translate", () => {
     const e = { id: 1 };
     expect(translate("entity", e, remap)).toBe(e);
     expect(translate("blockUpdate", e, null)).toBe(e);
+  });
+});
+
+describe("holdInAir", () => {
+  const fakeBot = (gameMode: string) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      game: { gameMode },
+      entity: { velocity: { x: 1, y: -2, z: 3 } },
+      creative: { startFlying: () => calls.push("start"), stopFlying: () => calls.push("stop") },
+    };
+  };
+  test("creative: flies until released and clears velocity", () => {
+    const bot = fakeBot("creative");
+    const release = holdInAir(bot);
+    expect(bot.calls).toEqual(["start"]);
+    expect(bot.entity.velocity).toEqual({ x: 0, y: 0, z: 0 });
+    release();
+    expect(bot.calls).toEqual(["start", "stop"]);
+  });
+  test("spectator also flies", () => {
+    const bot = fakeBot("spectator");
+    holdInAir(bot)();
+    expect(bot.calls).toEqual(["start", "stop"]);
+  });
+  test("survival does not fly (the server would kick for flying)", () => {
+    const bot = fakeBot("survival");
+    holdInAir(bot)();
+    expect(bot.calls).toEqual([]);
   });
 });
