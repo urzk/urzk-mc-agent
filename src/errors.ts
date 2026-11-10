@@ -8,8 +8,11 @@ export class UserFacingError extends Error {
 }
 
 export class NotConnectedError extends UserFacingError {
-  constructor() {
-    super("Minecraft サーバーに接続していません。先に connect を実行してください。");
+  constructor(lastDisconnectReason?: string) {
+    super(
+      "Minecraft サーバーに接続していません。先に connect を実行してください。" +
+        (lastDisconnectReason ? ` (最後の切断理由: ${lastDisconnectReason})` : ""),
+    );
   }
 }
 
