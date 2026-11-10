@@ -1,8 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { BotManager } from "../bot/manager.js";
 import type { AppConfig } from "../config.js";
+import { registerBlueprintTools } from "./tools/blueprint.js";
 import { registerCommandTools } from "./tools/commands.js";
 import { registerConnectionTools } from "./tools/connection.js";
+import { registerInspectTools } from "./tools/inspect.js";
 
 export type ToolContext = { bots: BotManager; config: AppConfig };
 
@@ -25,5 +27,7 @@ export function createServer(ctx: ToolContext): McpServer {
   const server = new McpServer({ name: "minecraft-build-agent", version: "1.0.0" }, { instructions: INSTRUCTIONS });
   registerConnectionTools(server, ctx);
   registerCommandTools(server, ctx);
+  registerInspectTools(server, ctx);
+  registerBlueprintTools(server, ctx);
   return server;
 }

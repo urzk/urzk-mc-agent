@@ -16,6 +16,24 @@ describe("createServer", () => {
       expect.arrayContaining(["connect", "disconnect", "get_status", "run_command", "run_commands"]),
     );
   });
+  test("lists inspection and blueprint tools", async () => {
+    const names = await listToolNames(makeServer());
+    expect(names).toEqual(
+      expect.arrayContaining(["read_blocks", "get_block", "wait_ticks", "apply_blueprint", "verify_blueprint"]),
+    );
+  });
+  test("inspection and blueprint tools without connection return isError", async () => {
+    for (const [name, args] of [
+      ["read_blocks", { from: [0, 0, 0], to: [1, 1, 1], format: "list" }],
+      ["get_block", { x: 0, y: 0, z: 0 }],
+      ["wait_ticks", { n: 1 }],
+      ["apply_blueprint", { blueprint: { ops: [] }, origin: [0, 0, 0] }],
+      ["verify_blueprint", { blueprint: { ops: [] }, origin: [0, 0, 0] }],
+    ] as const) {
+      const res = await callTool(makeServer(), name, args as unknown as Record<string, unknown>);
+      expect(res.isError, name).toBe(true);
+    }
+  });
   test("run_command without connection returns isError", async () => {
     const res = await callTool(makeServer(), "run_command", { command: "/time set day" });
     expect(res.isError).toBe(true);
