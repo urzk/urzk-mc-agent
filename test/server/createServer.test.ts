@@ -30,6 +30,12 @@ describe("createServer", () => {
       ]),
     );
   });
+  test("lists movement tools", async () => {
+    const names = await listToolNames(makeServer());
+    expect(names).toEqual(
+      expect.arrayContaining(["move_to", "teleport", "look_at", "interact_block", "place_block", "dig_block"]),
+    );
+  });
   test("inspection and blueprint tools without connection return isError", async () => {
     for (const [name, args] of [
       ["read_blocks", { from: [0, 0, 0], to: [1, 1, 1], format: "list" }],
@@ -37,6 +43,12 @@ describe("createServer", () => {
       ["wait_ticks", { n: 1 }],
       ["apply_blueprint", { blueprint: { ops: [] }, origin: [0, 0, 0] }],
       ["verify_blueprint", { blueprint: { ops: [] }, origin: [0, 0, 0] }],
+      ["move_to", { x: 0, y: 0, z: 0 }],
+      ["teleport", { x: 0, y: 0, z: 0 }],
+      ["look_at", { x: 0, y: 0, z: 0 }],
+      ["interact_block", { x: 0, y: 0, z: 0 }],
+      ["place_block", { x: 0, y: 0, z: 0, block: "stone" }],
+      ["dig_block", { x: 0, y: 0, z: 0 }],
     ] as const) {
       const res = await callTool(makeServer(), name, args as unknown as Record<string, unknown>);
       expect(res.isError, name).toBe(true);
